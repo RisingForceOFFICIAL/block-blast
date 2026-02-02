@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Block Blast!</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #1a1a2e;
+  --bg2: #16213e;
+  --grid-bg: #0f3460;
+  --cell-empty: rgba(255,255,255,0.06);
+  --cell-border: rgba(255,255,255,0.08);
+  --accent: #e94560;
+  --gold: #f5c518;
+  --text: #eee;
+  --text-dim: #8899aa;
+  --glow: rgba(233,69,96,0.4);
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#game {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  padding: 20px;
+  max-width: 520px;
+  width: 100%;
+}
+
+/* Header */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 0 4px;
+}
+
+.title {
+  font-size: 28px;
+  font-weight: 900;
+  background: linear-gradient(135deg, #e94560, #f5c518);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: -1px;
+}
+
+.scores {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.score-box {
+  text-align: center;
+  background: var(--bg2);
+  padding: 6px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+.score-box .label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+  font-weight: 700;
+}
+
+.score-box .value {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.score-box.high .value { color: var(--gold); }
+
+/* Grid */
+#grid-container {
+  position: relative;
+  background: var(--bg2);
+  border-radius: 16px;
+  padding: 8px;
+  border: 2px solid rgba(255,255,255,0.06);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+
+#grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 3px;
+  width: min(85vw, 420px);
+  height: min(85vw, 420px);
+}
+
+.cell {
+  border-radius: 5px;
+  background: var(--cell-empty);
+  border: 1px solid var(--cell-border);
+  transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
+  position: relative;
+  overflow: hidden;
+}
+
+.cell.filled {
+  border-color: rgba(0,0,0,0.2);
+  box-shadow: inset 0 -2px 4px rgba(0,0,0,0.2), inset 0 2px 4px rgba(255,255,255,0.15);
+}
+
+.cell.ghost {
+  background: rgba(255,255,255,0.15) !important;
+  border-color: rgba(255,255,255,0.25);
+}
+
+.cell.ghost-invalid {
+  background: rgba(233, 69, 96, 0.2) !important;
+  border-color: rgba(233, 69, 96, 0.4);
+}
+
+.cell.clearing {
+  animation: clearPop 0.45s ease-out forwards;
+}
+
+@keyframes clearPop {
+  0% { transform: scale(1); opacity: 1; }
+  40% { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(0); opacity: 0; }
+}
+
+/* Combo popup */
+.combo-popup {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 48px;
+  font-weight: 900;
+  color: var(--gold);
+  text-shadow: 0 0 20px var(--gold), 0 4px 8px rgba(0,0,0,0.5);
+  pointer-events: none;
+  animation: comboAnim 1s ease-out forwards;
+  z-index: 10;
+  white-space: nowrap;
+}
+
+@keyframes comboAnim {
+  0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+  30% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
+  70% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  100% { transform: translate(-50%, -80%) scale(0.8); opacity: 0; }
+}
+
+/* Score fly */
+.score-fly {
+  position: absolute;
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--gold);
+  text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+  pointer-events: none;
+  animation: scoreFly 1s ease-out forwards;
+  z-index: 10;
+}
+
+@keyframes scoreFly {
+  0% { transform: translateY(0); opacity: 1; }
+  100% { transform: translateY(-60px); opacity: 0; }
+}
+
+/* Pieces tray */
+#tray {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  min-height: 110px;
+  align-items: center;
+  width: 100%;
+  padding: 10px;
+  background: var(--bg2);
+  border-radius: 16px;
+  border: 2px solid rgba(255,255,255,0.06);
+}
+
+.piece-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  padding: 8px;
+  border-radius: 12px;
+  transition: transform 0.2s, box-shadow 0.2s, background 0.2s;
+  background: rgba(255,255,255,0.03);
+}
+
+.piece-wrapper:hover {
+  transform: scale(1.08);
+  background: rgba(255,255,255,0.06);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+}
+
+.piece-wrapper.dragging {
+  opacity: 0.3;
+  transform: scale(0.9);
+}
+
+.piece-wrapper.disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+  filter: grayscale(0.8);
+}
+
+.piece-grid {
+  display: grid;
+  gap: 2px;
+}
+
+.piece-cell {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+}
+
+.piece-cell.filled {
+  box-shadow: inset 0 -2px 3px rgba(0,0,0,0.2), inset 0 2px 3px rgba(255,255,255,0.15);
+  border: 1px solid rgba(0,0,0,0.15);
+}
+
+.piece-cell.empty {
+  background: transparent;
+}
+
+/* Drag preview */
+#drag-preview {
+  position: fixed;
+  pointer-events: none;
+  z-index: 1000;
+  display: none;
+  filter: drop-shadow(0 6px 16px rgba(0,0,0,0.5));
+  transition: none;
+}
+
+#drag-preview .piece-grid { gap: 3px; }
+
+#drag-preview .piece-cell {
+  border-radius: 5px;
+}
+
+/* Game Over overlay */
+#overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(10,10,20,0.85);
+  display: none;
+  justify-content: center;
+  align-items: center;
+  z-index: 100;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+#overlay.visible { display: flex; }
+
+.game-over-card {
+  background: var(--bg2);
+  border: 2px solid rgba(255,255,255,0.1);
+  border-radius: 24px;
+  padding: 40px 48px;
+  text-align: center;
+  box-shadow: 0 16px 64px rgba(0,0,0,0.6);
+  animation: slideUp 0.5s ease-out;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(40px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.game-over-card h2 {
+  font-size: 36px;
+  font-weight: 900;
+  margin-bottom: 8px;
+  background: linear-gradient(135deg, #e94560, #f5c518);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.game-over-card .final-score {
+  font-size: 56px;
+  font-weight: 900;
+  color: var(--text);
+  margin: 12px 0;
+}
+
+.game-over-card .best-label {
+  font-size: 14px;
+  color: var(--text-dim);
+  margin-bottom: 24px;
+}
+
+.game-over-card .best-label span { color: var(--gold); font-weight: 700; }
+
+#restart-btn {
+  background: linear-gradient(135deg, #e94560, #c0392b);
+  color: white;
+  border: none;
+  padding: 14px 40px;
+  font-size: 18px;
+  font-weight: 800;
+  border-radius: 14px;
+  cursor: pointer;
+  letter-spacing: 0.5px;
+  transition: transform 0.15s, box-shadow 0.15s;
+  box-shadow: 0 4px 16px var(--glow);
+}
+
+#restart-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 24px var(--glow);
+}
+
+/* Colors */
+.color-0 { background: #e94560; }
+.color-1 { background: #f5c518; }
+.color-2 { background: #00b894; }
+.color-3 { background: #6c5ce7; }
+.color-4 { background: #00cec9; }
+.color-5 { background: #fd79a8; }
+.color-6 { background: #e17055; }
+.color-7 { background: #0984e3; }
+
+/* Responsive */
+@media (max-width: 480px) {
+  #game { padding: 12px; gap: 12px; }
+  .title { font-size: 22px; }
+  .score-box { padding: 4px 10px; }
+  .score-box .value { font-size: 18px; }
+  .piece-cell { width: 18px; height: 18px; }
+  #tray { gap: 10px; min-height: 90px; padding: 6px; }
+  .piece-wrapper { padding: 5px; }
+}
+</style>
+</head>
+<body>
+
+<div id="game">
+  <div class="header">
+    <div class="title">BLOCK BLAST</div>
+    <div class="scores">
+      <div class="score-box">
+        <div class="label">Score</div>
+        <div class="value" id="score">0</div>
+      </div>
+      <div class="score-box high">
+        <div class="label">Best</div>
+        <div class="value" id="high-score">0</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="grid-container">
+    <div id="grid"></div>
+  </div>
+
+  <div id="tray"></div>
+</div>
+
+<div id="drag-preview"></div>
+
+<div id="overlay">
+  <div class="game-over-card">
+    <h2>GAME OVER</h2>
+    <div class="final-score" id="final-score">0</div>
+    <div class="best-label">Best: <span id="final-best">0</span></div>
+    <button id="restart-btn">PLAY AGAIN</button>
+  </div>
+</div>
+
+<script>
+// ─── SHAPES ───
+const SHAPES = [
+  // Single
+  { name:'dot', cells:[[0,0]] },
+  // Lines
+  { name:'h2', cells:[[0,0],[0,1]] },
+  { name:'v2', cells:[[0,0],[1,0]] },
+  { name:'h3', cells:[[0,0],[0,1],[0,2]] },
+  { name:'v3', cells:[[0,0],[1,0],[2,0]] },
+  { name:'h4', cells:[[0,0],[0,1],[0,2],[0,3]] },
+  { name:'v4', cells:[[0,0],[1,0],[2,0],[3,0]] },
+  { name:'h5', cells:[[0,0],[0,1],[0,2],[0,3],[0,4]] },
+  { name:'v5', cells:[[0,0],[1,0],[2,0],[3,0],[4,0]] },
+  // 2x2
+  { name:'sq', cells:[[0,0],[0,1],[1,0],[1,1]] },
+  // 3x3
+  { name:'sq3', cells:[[0,0],[0,1],[0,2],[1,0],[1,1],[1,2],[2,0],[2,1],[2,2]] },
+  // L shapes
+  { name:'L1', cells:[[0,0],[1,0],[2,0],[2,1]] },
+  { name:'L2', cells:[[0,0],[1,0],[2,0],[2,-1]] },
+  { name:'L3', cells:[[0,0],[0,1],[0,2],[1,0]] },
+  { name:'L4', cells:[[0,0],[0,1],[0,2],[1,2]] },
+  { name:'L5', cells:[[0,0],[0,1],[1,1],[2,1]] },
+  { name:'L6', cells:[[0,1],[1,1],[2,1],[2,0]] },
+  { name:'L7', cells:[[0,0],[1,0],[1,1],[1,2]] },
+  { name:'L8', cells:[[0,2],[1,0],[1,1],[1,2]] },
+  // T shapes
+  { name:'T1', cells:[[0,0],[0,1],[0,2],[1,1]] },
+  { name:'T2', cells:[[0,0],[1,0],[2,0],[1,1]] },
+  { name:'T3', cells:[[1,0],[1,1],[1,2],[0,1]] },
+  { name:'T4', cells:[[0,0],[1,0],[2,0],[1,-1]] },
+  // S/Z shapes
+  { name:'S1', cells:[[0,0],[0,1],[1,1],[1,2]] },
+  { name:'S2', cells:[[0,1],[0,2],[1,0],[1,1]] },
+  { name:'S3', cells:[[0,0],[1,0],[1,1],[2,1]] },
+  { name:'S4', cells:[[0,1],[1,0],[1,1],[2,0]] },
+  // Corner 2x2 (3 cells)
+  { name:'c1', cells:[[0,0],[0,1],[1,0]] },
+  { name:'c2', cells:[[0,0],[0,1],[1,1]] },
+  { name:'c3', cells:[[0,0],[1,0],[1,1]] },
+  { name:'c4', cells:[[0,1],[1,0],[1,1]] },
+];
+
+const GRID = 8;
+const COLORS = 8;
+
+// ─── STATE ───
+let board = [];        // 8x8, 0 = empty, or color index + 1
+let pieces = [];       // current 3 pieces [{shape, color, placed}]
+let score = 0;
+let highScore = +(localStorage.getItem('bb_high') || 0);
+let dragging = null;   // {index, shape, color, offsetR, offsetC}
+let ghostCells = [];
+
+const $grid = document.getElementById('grid');
+const $tray = document.getElementById('tray');
+const $score = document.getElementById('score');
+const $highScore = document.getElementById('high-score');
+const $overlay = document.getElementById('overlay');
+const $finalScore = document.getElementById('final-score');
+const $finalBest = document.getElementById('final-best');
+const $dragPreview = document.getElementById('drag-preview');
+const $gridContainer = document.getElementById('grid-container');
+
+// ─── INIT ───
+function init() {
+  board = Array.from({length: GRID}, () => Array(GRID).fill(0));
+  score = 0;
+  updateScore(0);
+  $highScore.textContent = highScore;
+  $overlay.classList.remove('visible');
+  buildGrid();
+  spawnPieces();
+}
+
+function buildGrid() {
+  $grid.innerHTML = '';
+  for (let r = 0; r < GRID; r++) {
+    for (let c = 0; c < GRID; c++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.dataset.r = r;
+      cell.dataset.c = c;
+      $grid.appendChild(cell);
+    }
+  }
+}
+
+function renderBoard() {
+  const cells = $grid.children;
+  for (let r = 0; r < GRID; r++) {
+    for (let c = 0; c < GRID; c++) {
+      const cell = cells[r * GRID + c];
+      const v = board[r][c];
+      cell.className = 'cell' + (v ? ` filled color-${v - 1}` : '');
+    }
+  }
+}
+
+// ─── PIECES ───
+function randomPiece() {
+  const shape = SHAPES[Math.floor(Math.random() * SHAPES.length)];
+  const color = Math.floor(Math.random() * COLORS);
+  return { shape, color, placed: false };
+}
+
+function spawnPieces() {
+  pieces = [randomPiece(), randomPiece(), randomPiece()];
+  renderTray();
+}
+
+function renderTray() {
+  $tray.innerHTML = '';
+  pieces.forEach((p, i) => {
+    if (p.placed) return;
+    const wrapper = document.createElement('div');
+    wrapper.className = 'piece-wrapper';
+    if (!canPlaceAnywhere(p.shape)) wrapper.classList.add('disabled');
+    wrapper.dataset.index = i;
+    wrapper.appendChild(buildPieceGrid(p.shape, p.color));
+    $tray.appendChild(wrapper);
+
+    wrapper.addEventListener('mousedown', e => startDrag(e, i));
+    wrapper.addEventListener('touchstart', e => startDrag(e, i), {passive: false});
+  });
+}
+
+function buildPieceGrid(shape, color, cellSize) {
+  const cells = shape.cells;
+  let minR = Infinity, maxR = -Infinity, minC = Infinity, maxC = -Infinity;
+  cells.forEach(([r,c]) => { minR = Math.min(minR,r); maxR = Math.max(maxR,r); minC = Math.min(minC,c); maxC = Math.max(maxC,c); });
+  const rows = maxR - minR + 1;
+  const cols = maxC - minC + 1;
+
+  const grid = document.createElement('div');
+  grid.className = 'piece-grid';
+  grid.style.gridTemplateColumns = `repeat(${cols}, ${cellSize || 22}px)`;
+  grid.style.gridTemplateRows = `repeat(${rows}, ${cellSize || 22}px)`;
+
+  const set = new Set(cells.map(([r,c]) => `${r - minR},${c - minC}`));
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const cell = document.createElement('div');
+      cell.className = 'piece-cell ' + (set.has(`${r},${c}`) ? `filled color-${color}` : 'empty');
+      if (cellSize) { cell.style.width = cellSize + 'px'; cell.style.height = cellSize + 'px'; }
+      grid.appendChild(cell);
+    }
+  }
+  return grid;
+}
+
+// ─── DRAG & DROP ───
+function getCellSize() {
+  const firstCell = $grid.children[0];
+  return firstCell ? firstCell.getBoundingClientRect().width : 40;
+}
+
+function startDrag(e, index) {
+  e.preventDefault();
+  const p = pieces[index];
+  if (p.placed || !canPlaceAnywhere(p.shape)) return;
+
+  const cells = p.shape.cells;
+  let minR = Infinity, minC = Infinity;
+  cells.forEach(([r,c]) => { minR = Math.min(minR,r); minC = Math.min(minC,c); });
+
+  dragging = { index, shape: p.shape, color: p.color, offsetR: -minR, offsetC: -minC };
+
+  // Mark tray piece
+  const wrapper = $tray.querySelector(`[data-index="${index}"]`);
+  if (wrapper) wrapper.classList.add('dragging');
+
+  // Build drag preview at grid scale
+  const cellSize = getCellSize();
+  $dragPreview.innerHTML = '';
+  $dragPreview.appendChild(buildPieceGrid(p.shape, p.color, cellSize));
+  $dragPreview.style.display = 'block';
+
+  moveDrag(e);
+}
+
+function moveDrag(e) {
+  if (!dragging) return;
+  const pt = e.touches ? e.touches[0] : e;
+  const cellSize = getCellSize();
+  const cells = dragging.shape.cells;
+  let minR = Infinity, maxR = -Infinity, minC = Infinity, maxC = -Infinity;
+  cells.forEach(([r,c]) => { minR = Math.min(minR,r); maxR = Math.max(maxR,r); minC = Math.min(minC,c); maxC = Math.max(maxC,c); });
+  const rows = maxR - minR + 1;
+  const cols = maxC - minC + 1;
+
+  const pw = cols * (cellSize + 3);
+  const ph = rows * (cellSize + 3);
+  $dragPreview.style.left = (pt.clientX - pw / 2) + 'px';
+  $dragPreview.style.top = (pt.clientY - ph - 40) + 'px';
+
+  // Ghost
+  clearGhost();
+  const gridRect = $grid.getBoundingClientRect();
+  const gx = pt.clientX - gridRect.left;
+  const gy = pt.clientY - gridRect.top - (cellSize * 2.5);
+  const gc = Math.round(gx / (gridRect.width / GRID) - (maxC - minC + 1) / 2);
+  const gr = Math.round(gy / (gridRect.height / GRID) - (maxR - minR + 1) / 2);
+
+  const adjusted = cells.map(([r,c]) => [r - minR + gr, c - minC + gc]);
+  const valid = canPlace(adjusted);
+
+  adjusted.forEach(([r,c]) => {
+    if (r >= 0 && r < GRID && c >= 0 && c < GRID) {
+      const cell = $grid.children[r * GRID + c];
+      cell.classList.add(valid ? 'ghost' : 'ghost-invalid');
+      ghostCells.push(cell);
+    }
+  });
+
+  dragging._snapR = gr;
+  dragging._snapC = gc;
+  dragging._valid = valid;
+}
+
+function endDrag(e) {
+  if (!dragging) return;
+  clearGhost();
+  $dragPreview.style.display = 'none';
+
+  const wrapper = $tray.querySelector(`[data-index="${dragging.index}"]`);
+  if (wrapper) wrapper.classList.remove('dragging');
+
+  if (dragging._valid) {
+    placePiece(dragging.index, dragging._snapR, dragging._snapC);
+  }
+
+  dragging = null;
+}
+
+function clearGhost() {
+  ghostCells.forEach(c => { c.classList.remove('ghost'); c.classList.remove('ghost-invalid'); });
+  ghostCells = [];
+}
+
+document.addEventListener('mousemove', moveDrag);
+document.addEventListener('mouseup', endDrag);
+document.addEventListener('touchmove', e => { e.preventDefault(); moveDrag(e); }, {passive: false});
+document.addEventListener('touchend', endDrag);
+
+// ─── PLACEMENT ───
+function canPlace(adjusted) {
+  return adjusted.every(([r,c]) => r >= 0 && r < GRID && c >= 0 && c < GRID && !board[r][c]);
+}
+
+function canPlaceAnywhere(shape) {
+  const cells = shape.cells;
+  let minR = Infinity, minC = Infinity;
+  cells.forEach(([r,c]) => { minR = Math.min(minR,r); minC = Math.min(minC,c); });
+  const norm = cells.map(([r,c]) => [r - minR, c - minC]);
+
+  for (let gr = 0; gr < GRID; gr++) {
+    for (let gc = 0; gc < GRID; gc++) {
+      const adj = norm.map(([r,c]) => [r + gr, c + gc]);
+      if (canPlace(adj)) return true;
+    }
+  }
+  return false;
+}
+
+function placePiece(index, gr, gc) {
+  const p = pieces[index];
+  const cells = p.shape.cells;
+  let minR = Infinity, minC = Infinity;
+  cells.forEach(([r,c]) => { minR = Math.min(minR,r); minC = Math.min(minC,c); });
+  const adjusted = cells.map(([r,c]) => [r - minR + gr, c - minC + gc]);
+
+  adjusted.forEach(([r,c]) => { board[r][c] = p.color + 1; });
+  p.placed = true;
+
+  // Points for placing
+  updateScore(adjusted.length);
+
+  renderBoard();
+  checkClears();
+
+  // Check if need new pieces
+  if (pieces.every(p => p.placed)) {
+    spawnPieces();
+  } else {
+    renderTray();
+  }
+
+  // Check game over
+  const remaining = pieces.filter(p => !p.placed);
+  if (remaining.length > 0 && remaining.every(p => !canPlaceAnywhere(p.shape))) {
+    setTimeout(gameOver, 300);
+  }
+}
+
+// ─── LINE CLEARING ───
+function checkClears() {
+  const clearRows = [];
+  const clearCols = [];
+
+  for (let r = 0; r < GRID; r++) {
+    if (board[r].every(v => v !== 0)) clearRows.push(r);
+  }
+  for (let c = 0; c < GRID; c++) {
+    let full = true;
+    for (let r = 0; r < GRID; r++) { if (!board[r][c]) { full = false; break; } }
+    if (full) clearCols.push(c);
+  }
+
+  const totalLines = clearRows.length + clearCols.length;
+  if (totalLines === 0) return;
+
+  // Collect cells to clear
+  const toClear = new Set();
+  clearRows.forEach(r => { for (let c = 0; c < GRID; c++) toClear.add(r * GRID + c); });
+  clearCols.forEach(c => { for (let r = 0; r < GRID; r++) toClear.add(r * GRID + c); });
+
+  // Animate
+  toClear.forEach(idx => {
+    $grid.children[idx].classList.add('clearing');
+  });
+
+  // Points: 10 per cell + combo bonus
+  const cellPoints = toClear.size * 10;
+  const comboBonus = totalLines > 1 ? totalLines * 20 : 0;
+  const total = cellPoints + comboBonus;
+
+  // Score fly
+  const gridRect = $gridContainer.getBoundingClientRect();
+  const fly = document.createElement('div');
+  fly.className = 'score-fly';
+  fly.textContent = '+' + total;
+  fly.style.left = (gridRect.width / 2 - 20) + 'px';
+  fly.style.top = (gridRect.height / 2) + 'px';
+  $gridContainer.appendChild(fly);
+  setTimeout(() => fly.remove(), 1000);
+
+  // Combo popup
+  if (totalLines > 1) {
+    const popup = document.createElement('div');
+    popup.className = 'combo-popup';
+    const labels = ['', '', 'DOUBLE!', 'TRIPLE!', 'QUAD!', 'MEGA!'];
+    popup.textContent = labels[Math.min(totalLines, 5)] || `${totalLines}x COMBO!`;
+    $gridContainer.appendChild(popup);
+    setTimeout(() => popup.remove(), 1000);
+  }
+
+  updateScore(total);
+
+  // Actually clear after animation
+  setTimeout(() => {
+    toClear.forEach(idx => {
+      const r = Math.floor(idx / GRID);
+      const c = idx % GRID;
+      board[r][c] = 0;
+    });
+    renderBoard();
+  }, 400);
+}
+
+// ─── SCORE ───
+function updateScore(pts) {
+  score += pts;
+  $score.textContent = score;
+  if (score > highScore) {
+    highScore = score;
+    localStorage.setItem('bb_high', highScore);
+    $highScore.textContent = highScore;
+  }
+}
+
+// ─── GAME OVER ───
+function gameOver() {
+  $finalScore.textContent = score;
+  $finalBest.textContent = highScore;
+  $overlay.classList.add('visible');
+}
+
+document.getElementById('restart-btn').addEventListener('click', init);
+
+// ─── START ───
+init();
+</script>
+</body>
+</html>
